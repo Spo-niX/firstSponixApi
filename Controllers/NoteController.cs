@@ -36,9 +36,10 @@ public class NoteController : ControllerBase
     }
     
     [HttpGet]
-    public IActionResult GetAllNotes()
+    public async Task<IActionResult> GetAllNotes()
     {
-        return Ok(_db.Notes.ToListAsync());
+        var notes = await _db.Notes.ToListAsync();
+        return Ok(notes);
     }
 
     [HttpGet("{Id}")]
@@ -47,9 +48,55 @@ public class NoteController : ControllerBase
         Note? nt = _db.Notes.Find(Id);
 
         if(nt == null)
-            return BadRequest("Note never exist");
+            return NotFound("Note never exist");
 
         return Ok(nt);
+    }
+
+    [HttpGet("search")]
+    public async Task<IActionResult> SearchNotes(
+        [FromQuery] string? search,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to)
+    {
+        List<Note> res = new List<Note>();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var notes = _db.Notes.AsAsyncEnumerable();
+
+            var p = notes.Where(x => x.Title.ToUpper().Contains(search.ToUpper()) || x.Content.ToUpper().Contains(search.ToUpper()));
+
+            res.AddRange(await p.ToListAsync());
+        }
+        if(from != null)
+        {
+            var notes = _db.Notes.AsAsyncEnumerable();
+            if(notes == null) return NotFound("No any notes exist");
+            await foreach(Note nt in notes)
+            {
+                if(nt.CreatedAt > from)
+                {
+                    res.Add(nt);
+                }
+            }
+        }
+        if(to != null)
+        {
+            var notes = _db.Notes.AsAsyncEnumerable();
+            if(notes == null) return NotFound("No any notes exist");
+            await foreach(Note nt in notes)
+            {
+                if(nt.CreatedAt < to)
+                {
+                    res.Add(nt);
+                }
+            }
+        }
+
+        if(res.Count != 0)
+            return Ok(res);
+
+        return NotFound("No any notes found");
     }
 
     [HttpPut]
@@ -82,7 +129,7 @@ public class NoteController : ControllerBase
         Note? nt = _db.Notes.Find(Id);
 
         if (nt == null)
-            return BadRequest("Заметка не найдена");
+            return  NotFound("Note never exist");
         
         _db.Notes.Remove(nt);
         
